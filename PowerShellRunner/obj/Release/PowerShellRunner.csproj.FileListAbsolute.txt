@@ -1,4 +1,0 @@
-e:\documents\visual studio 2013\Projects\UnmanagedPowerShell\PowerShellRunner\bin\Release\PowerShellRunner.dll
-e:\documents\visual studio 2013\Projects\UnmanagedPowerShell\PowerShellRunner\bin\Release\PowerShellRunner.pdb
-e:\documents\visual studio 2013\Projects\UnmanagedPowerShell\PowerShellRunner\obj\Release\PowerShellRunner.dll
-e:\documents\visual studio 2013\Projects\UnmanagedPowerShell\PowerShellRunner\obj\Release\PowerShellRunner.pdb
