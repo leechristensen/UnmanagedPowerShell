@@ -53,7 +53,7 @@ namespace PowerShellRunner
 
             public override string Name
             {
-                get { return ""; }
+                get { return "ConsoleHost"; }
             }
 
             public override Version Version
