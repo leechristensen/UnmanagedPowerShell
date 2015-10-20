@@ -157,17 +157,9 @@ HRESULT createHost(const wchar_t* version, ICorRuntimeHost** ppCorRuntimeHost)
 int _tmain(int argc, _TCHAR* argv[])
 {
 	HRESULT hr;
-
-	//ICLRRuntimeHost*        RuntimeClrHost = NULL;
-
-
 	ICorRuntimeHost *pCorRuntimeHost = NULL;
-
 	IUnknownPtr spAppDomainThunk = NULL;
 	_AppDomainPtr spDefaultAppDomain = NULL;
-
-
-	bool useOldAPIs = false;
 
 	// The .NET assembly to load.
 	bstr_t bstrAssemblyName("PowerShellRunner");
@@ -176,7 +168,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	// The .NET class to instantiate.
 	bstr_t bstrClassName("PowerShellRunner.PowerShellRunner");
 	_TypePtr spType = NULL;
-
 
 
 	// Create the runtime host
