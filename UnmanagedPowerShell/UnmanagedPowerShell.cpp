@@ -7,6 +7,7 @@
 #include <comdef.h>
 #include <mscoree.h>
 #include "PowerShellRunnerDll.h"
+#include "UnmanagedPowershell.h"
 
 #include <metahost.h>
 #pragma comment(lib, "mscoree.lib")
@@ -18,6 +19,18 @@
 using namespace mscorlib;
 #pragma endregion
 
+typedef HRESULT(WINAPI *funcCLRCreateInstance)(
+	REFCLSID  clsid,
+	REFIID     riid,
+	LPVOID  * ppInterface
+	);
+
+typedef HRESULT (WINAPI *funcCorBindToRuntime)(
+	LPCWSTR  pwszVersion,
+	LPCWSTR  pwszBuildFlavor,
+	REFCLSID rclsid,
+	REFIID   riid,
+	LPVOID*  ppv);
 
 
 extern const unsigned int PowerShellRunner_dll_len;
@@ -25,30 +38,25 @@ extern unsigned char PowerShellRunner_dll[];
 void InvokeMethod(_TypePtr spType, wchar_t* method, wchar_t* command);
 
 
-int _tmain(int argc, _TCHAR* argv[])
+bool createDotNetFourHost(HMODULE* hMscoree, const wchar_t* version, ICorRuntimeHost** ppCorRuntimeHost)
 {
-	HRESULT hr;
-
+	HRESULT hr = NULL;
+	funcCLRCreateInstance pCLRCreateInstance = NULL;
 	ICLRMetaHost *pMetaHost = NULL;
 	ICLRRuntimeInfo *pRuntimeInfo = NULL;
-	ICorRuntimeHost *pCorRuntimeHost = NULL;
+	bool hostCreated = false;
 
-	IUnknownPtr spAppDomainThunk = NULL;
-	_AppDomainPtr spDefaultAppDomain = NULL;
+	pCLRCreateInstance = (funcCLRCreateInstance)GetProcAddress(*hMscoree, "CLRCreateInstance");
+	if (pCLRCreateInstance == NULL)
+	{
+		wprintf(L"Could not find .NET 4.0 API CLRCreateInstance");
+		goto Cleanup;
+	}
 
-	// The .NET assembly to load.
-	bstr_t bstrAssemblyName("PowerShellRunner");
-	_AssemblyPtr spAssembly = NULL;
-
-	// The .NET class to instantiate.
-	bstr_t bstrClassName("PowerShellRunner.PowerShellRunner");
-	_TypePtr spType = NULL;
-
-
-	// Start the runtime
-	hr = CLRCreateInstance(CLSID_CLRMetaHost, IID_PPV_ARGS(&pMetaHost));
+	hr = pCLRCreateInstance(CLSID_CLRMetaHost, IID_PPV_ARGS(&pMetaHost));
 	if (FAILED(hr))
 	{
+		// For some reason, this still prints on .NET 2.0/3.5 machines...
 		wprintf(L"CLRCreateInstance failed w/hr 0x%08lx\n", hr);
 		goto Cleanup;
 	}
@@ -61,34 +69,139 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	// Check if the specified runtime can be loaded into the process.
-	BOOL fLoadable;
-	hr = pRuntimeInfo->IsLoadable(&fLoadable);
+	BOOL loadable;
+	hr = pRuntimeInfo->IsLoadable(&loadable);
 	if (FAILED(hr))
 	{
 		wprintf(L"ICLRRuntimeInfo::IsLoadable failed w/hr 0x%08lx\n", hr);
 		goto Cleanup;
 	}
 
-	if (!fLoadable)
+	if (!loadable)
 	{
 		wprintf(L".NET runtime v2.0.50727 cannot be loaded\n");
 		goto Cleanup;
 	}
 
 	// Load the CLR into the current process and return a runtime interface
-	hr = pRuntimeInfo->GetInterface(CLSID_CorRuntimeHost,
-		IID_PPV_ARGS(&pCorRuntimeHost));
+	hr = pRuntimeInfo->GetInterface(CLSID_CorRuntimeHost, IID_PPV_ARGS(ppCorRuntimeHost));
 	if (FAILED(hr))
 	{
 		wprintf(L"ICLRRuntimeInfo::GetInterface failed w/hr 0x%08lx\n", hr);
 		goto Cleanup;
 	}
 
-	// Start the CLR.
+	hostCreated = true;
+
+Cleanup:
+
+	if (pMetaHost)
+	{
+		pMetaHost->Release();
+		pMetaHost = NULL;
+	}
+	if (pRuntimeInfo)
+	{
+		pRuntimeInfo->Release();
+		pRuntimeInfo = NULL;
+	}
+
+	return hostCreated;
+}
+
+
+HRESULT createDotNetTwoHost(HMODULE* hMscoree, const wchar_t* version, ICorRuntimeHost** ppCorRuntimeHost)
+{
+	HRESULT hr = NULL;
+	bool hostCreated = false;
+	funcCorBindToRuntime pCorBindToRuntime = NULL;
+	
+	pCorBindToRuntime = (funcCorBindToRuntime)GetProcAddress(*hMscoree, "CorBindToRuntime");
+	if (!pCorBindToRuntime)
+	{
+		wprintf(L"Could not find API CorBindToRuntime");
+		goto Cleanup;
+	}
+
+	hr = pCorBindToRuntime(version, L"wks", CLSID_CorRuntimeHost, IID_PPV_ARGS(ppCorRuntimeHost));
+	if (FAILED(hr))
+	{
+		wprintf(L"CorBindToRuntime failed w/hr 0x%08lx\n", hr);
+		goto Cleanup;
+	}
+
+	hostCreated = true;
+
+Cleanup:
+
+	return hostCreated;
+}
+
+HRESULT createHost(const wchar_t* version, ICorRuntimeHost** ppCorRuntimeHost)
+{
+	bool hostCreated = false;
+
+	HMODULE hMscoree = LoadLibrary(L"mscoree.dll");
+	
+	if (hMscoree)
+	{
+		if (createDotNetFourHost(&hMscoree, version, ppCorRuntimeHost) || createDotNetTwoHost(&hMscoree, version, ppCorRuntimeHost))
+		{
+			hostCreated = true;
+		}
+	}
+	
+	return hostCreated;
+}
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+	HRESULT hr;
+
+	//ICLRRuntimeHost*        RuntimeClrHost = NULL;
+
+
+	ICorRuntimeHost *pCorRuntimeHost = NULL;
+
+	IUnknownPtr spAppDomainThunk = NULL;
+	_AppDomainPtr spDefaultAppDomain = NULL;
+
+
+	bool useOldAPIs = false;
+
+	// The .NET assembly to load.
+	bstr_t bstrAssemblyName("PowerShellRunner");
+	_AssemblyPtr spAssembly = NULL;
+
+	// The .NET class to instantiate.
+	bstr_t bstrClassName("PowerShellRunner.PowerShellRunner");
+	_TypePtr spType = NULL;
+
+
+
+	// Create the runtime host
+	if (!createHost(L"v2.0.50727", &pCorRuntimeHost))
+	{
+		wprintf(L"Failed to create the runtime host\n");
+		goto Cleanup;
+	}
+
+	
+	// Start the CLR
 	hr = pCorRuntimeHost->Start();
 	if (FAILED(hr))
 	{
 		wprintf(L"CLR failed to start w/hr 0x%08lx\n", hr);
+		goto Cleanup;
+	}
+
+
+
+	DWORD appDomainId = NULL;
+	hr = pCorRuntimeHost->GetDefaultDomain(&spAppDomainThunk);
+	if (FAILED(hr))
+	{
+		wprintf(L"RuntimeClrHost::GetCurrentAppDomainId failed w/hr 0x%08lx\n", hr);
 		goto Cleanup;
 	}
 
@@ -110,7 +223,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	// Load the .NET assembly.
 	// (Option 1) Load it from disk - usefully when debugging the PowerShellRunner app (you'll have to copy the DLL into the same directory as the exe)
-	//hr = spDefaultAppDomain->Load_2(bstrAssemblyName, &spAssembly);
+	hr = spDefaultAppDomain->Load_2(bstrAssemblyName, &spAssembly);
 	
 	// (Option 2) Load the assembly from memory
 	SAFEARRAYBOUND bounds[1];
@@ -148,16 +261,6 @@ int _tmain(int argc, _TCHAR* argv[])
 
 Cleanup:
 
-	if (pMetaHost)
-	{
-		pMetaHost->Release();
-		pMetaHost = NULL;
-	}
-	if (pRuntimeInfo)
-	{
-		pRuntimeInfo->Release();
-		pRuntimeInfo = NULL;
-	}
 	if (pCorRuntimeHost)
 	{
 		pCorRuntimeHost->Release();
