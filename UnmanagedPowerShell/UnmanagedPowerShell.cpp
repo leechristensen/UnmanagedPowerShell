@@ -7,7 +7,6 @@
 #include <comdef.h>
 #include <mscoree.h>
 #include "PowerShellRunnerDll.h"
-#include "UnmanagedPowershell.h"
 
 #include <metahost.h>
 #pragma comment(lib, "mscoree.lib")
@@ -56,7 +55,7 @@ bool createDotNetFourHost(HMODULE* hMscoree, const wchar_t* version, ICorRuntime
 	hr = pCLRCreateInstance(CLSID_CLRMetaHost, IID_PPV_ARGS(&pMetaHost));
 	if (FAILED(hr))
 	{
-		// For some reason, this still prints on .NET 2.0/3.5 machines...
+		// Potentially fails on .NET 2.0/3.5 machines with E_NOTIMPL
 		wprintf(L"CLRCreateInstance failed w/hr 0x%08lx\n", hr);
 		goto Cleanup;
 	}
