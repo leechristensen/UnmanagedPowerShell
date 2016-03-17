@@ -213,7 +213,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	// Load the .NET assembly.
 	// (Option 1) Load it from disk - usefully when debugging the PowerShellRunner app (you'll have to copy the DLL into the same directory as the exe)
-	hr = spDefaultAppDomain->Load_2(bstrAssemblyName, &spAssembly);
+	// hr = spDefaultAppDomain->Load_2(bstrAssemblyName, &spAssembly);
 	
 	// (Option 2) Load the assembly from memory
 	SAFEARRAYBOUND bounds[1];
